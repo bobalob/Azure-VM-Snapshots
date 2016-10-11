@@ -3,15 +3,14 @@
 
 Function Create-AzureRMVMSnap {
 	Param(
-		$VMName="MyVirutalMachine",
-		$AzureAccount
-		)
+		[Parameter(Mandatory=$true)]$VMName
+    )
 	
 	Write-Host "Create Snapshot for VM: " -ForegroundColor Yellow -NoNewline
 	Write-Host $VMName -ForegroundColor Cyan
 
 	if (!(Get-AzureAccount)) {
-		$AzureAccount = Login-AzureRmAccount
+		$AzureAccount = Add-AzureAccount
 	}
 
 	$VM = Get-AzureRmVM | ? {$_.Name -eq $VMName}
@@ -33,12 +32,22 @@ Function Create-AzureRMVMSnap {
 			$DiskToSnap.VHDName = $DiskUri.Split("/")[-1]
 			$DiskToSnap.ContainerName = $DiskUri.Split("/")[-2]
 				
-			$StorageAccountResource = find-azurermresource -ResourceNameContains $DiskToSnap.StorageAccountName
-			$StorageKey = Get-AzureRmStorageAccountKey -Name $StorageAccountResource.Name -ResourceGroupName $StorageAccountResource.ResourceGroupName
-			$StorageContext = New-AzureStorageContext -StorageAccountName $StorageAccountResource.Name -StorageAccountKey $StorageKey[0].Value
+			$StorageAccountResource = find-azurermresource -ResourceNameContains `
+                $DiskToSnap.StorageAccountName
 
-			$DiskBlob = Get-AzureStorageBlob -Container $DiskToSnap.ContainerName -Context $StorageContext -Blob $DiskToSnap.VHDName
+			$StorageKey = Get-AzureRmStorageAccountKey `
+                -Name $StorageAccountResource.Name `
+                -ResourceGroupName $StorageAccountResource.ResourceGroupName
+
+			$StorageContext = New-AzureStorageContext `
+                -StorageAccountName $StorageAccountResource.Name `
+                -StorageAccountKey $StorageKey[0].Value
+
+			$DiskBlob = Get-AzureStorageBlob -Container $DiskToSnap.ContainerName `
+                -Context $StorageContext -Blob $DiskToSnap.VHDName
+
 			$Snapshots += $DiskBlob.ICloudBlob.CreateSnapshot()
+
 		}
 
 		$Snapshots
@@ -49,12 +58,11 @@ Function Create-AzureRMVMSnap {
 
 Function Get-AzureRMVMSnap {
 	Param(
-		$VMName="MyVirutalMachine",
-		$AzureAccount
-		)
+		[Parameter(Mandatory=$true)]$VMName
+	)
 
 	if (!(Get-AzureAccount)) {
-		$AzureAccount = Login-AzureRmAccount
+		$AzureAccount = Add-AzureAccount
 	}
 
 	$VM = Get-AzureRmVM | ? {$_.Name -eq $VMName}
@@ -76,11 +84,23 @@ Function Get-AzureRMVMSnap {
 			$DiskToSnap.VHDName = $DiskUri.Split("/")[-1]
 			$DiskToSnap.ContainerName = $DiskUri.Split("/")[-2]
 				
-			$StorageAccountResource = find-azurermresource -ResourceNameContains $DiskToSnap.StorageAccountName
-			$StorageKey = Get-AzureRmStorageAccountKey -Name $StorageAccountResource.Name -ResourceGroupName $StorageAccountResource.ResourceGroupName
-			$StorageContext = New-AzureStorageContext -StorageAccountName $StorageAccountResource.Name -StorageAccountKey $StorageKey[0].Value
+			$StorageAccountResource = find-azurermresource `
+                -ResourceNameContains $DiskToSnap.StorageAccountName
 
-			Get-AzureStorageBlob -Container $DiskToSnap.ContainerName -Context $StorageContext | ? {$_.Name -eq $DiskToSnap.VHDName -and $_.ICloudBlob.IsSnapshot -and $_.SnapshotTime -ne $null}
+			$StorageKey = Get-AzureRmStorageAccountKey `
+                -Name $StorageAccountResource.Name `
+                -ResourceGroupName $StorageAccountResource.ResourceGroupName
+
+			$StorageContext = New-AzureStorageContext `
+                -StorageAccountName $StorageAccountResource.Name `
+                -StorageAccountKey $StorageKey[0].Value
+
+			Get-AzureStorageBlob -Container $DiskToSnap.ContainerName `
+                -Context $StorageContext | 
+                ? {$_.Name -eq $DiskToSnap.VHDName `
+                        -and $_.ICloudBlob.IsSnapshot `
+                        -and $_.SnapshotTime -ne $null
+            }
 		}
 
 	} else {
@@ -89,6 +109,23 @@ Function Get-AzureRMVMSnap {
 }
 
 Function Delete-RMVMSnap {
-	Param ($VMName)
-	Get-AzureRMVMSnap -VMName $VMName | % {$_.ICloudBlob.Delete()}
+	Param (
+        [Parameter(Mandatory=$true)]$VMName, 
+        [switch]$DeleteAll=$False
+    )
+	
+    $DiskSnaps = Get-AzureRMVMSnap -VMName $VMName 
+
+    if ($DeleteAll) {
+        $DiskSnaps | % {$_.ICloudBlob.Delete()}
+    } else {
+        Foreach ($Snap in $DiskSnaps) {
+            $Snap
+            $Delete = Read-Host "Delete this snap? [y/N]: "
+            if ($Delete -eq "y") {
+                $Snap.ICloudBlob.Delete()
+            }
+        }
+    }
+    
 }
