@@ -45,8 +45,7 @@ Function Create-AzureRMVMSnap {
 
 	} else {
 		Write-Host "Unable to get VM"
-	}
-}
+	}}
 
 Function Get-AzureRMVMSnap {
 	Param(
@@ -89,7 +88,7 @@ Function Get-AzureRMVMSnap {
 	}
 }
 
-Function Delete-RMVMSnaps {
+Function Delete-RMVMSnap {
 	Param ($VMName)
 	Get-AzureRMVMSnap -VMName $VMName | % {$_.ICloudBlob.Delete()}
 }
