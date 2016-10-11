@@ -108,7 +108,7 @@ Function Get-AzureRMVMSnap {
 	}
 }
 
-Function Delete-RMVMSnap {
+Function Delete-AzureRMVMSnap {
 	Param (
         [Parameter(Mandatory=$true)]$VMName, 
         [switch]$DeleteAll=$False
