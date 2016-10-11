@@ -6,8 +6,11 @@ Usage:
 
 C:\> . .\AzureSnapFunctions.PS1
 
+Create a New snapshot for all VHDs in a VM
 C:\> Snap-AzureRMVM -VMName MyVM
 
-C:\> Get-AzureRMVMSnaps -VMName MyVM
+View the snapshots for all VHDs on a VM
+C:\> Get-AzureRMVMSnap -VMName MyVM
 
-C:\> Delete-AzureRMVMSnaps -VMName MyVM
+Delete all snapshots for all VHDs on a VM
+C:\> Delete-AzureRMVMSnap -VMName MyVM
