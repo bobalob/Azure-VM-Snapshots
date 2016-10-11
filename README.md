@@ -22,4 +22,4 @@ Delete all snapshots for all VHDs on a VM
 
     C:\> Delete-AzureRMVMSnap -VMName MyVM
 
-Coming soon... Revert functionality which will create a new VM an attach rolled back disks. I also plan to allow the user to select which snapshots to delete based on a date range or similar filters.
+Coming soon... Revert functionality which will create a new VM and attach rolled back disks. I also plan to allow the user to select which snapshots to delete based on a date range or similar filters.
