@@ -10,7 +10,7 @@ Load the functions
 
 Create a New snapshot for all VHDs in a VM
 
-    C:\> Snap-AzureRMVM -VMName MyVM
+    C:\> Create-AzureRMVMSnap -VMName MyVM
 
 
 View the snapshots for all VHDs on a VM
