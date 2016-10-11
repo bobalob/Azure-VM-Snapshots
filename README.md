@@ -4,6 +4,8 @@ Powershell Functions for Creating Azure RM VM Snapshots
 
 Usage:
 
+Load the functions
+
     C:\> . .\AzureSnapFunctions.PS1
 
 Create a New snapshot for all VHDs in a VM
