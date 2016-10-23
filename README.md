@@ -1,6 +1,7 @@
 # Azure-VM-Snapshots
 Powershell Functions for Creating Azure RM VM Snapshots
 
+**DO NOT USE THIS ON A PRODUCTION MACHINE!**
 
 Usage:
 
