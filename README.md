@@ -11,7 +11,7 @@ Load the functions
 
 Create a New snapshot for all VHDs in a VM (VM Should be powered down)
 
-    C:\> New-AzureRMVMSnap -VMName MyVM
+    C:\> New-AzureRMVMSnap -VMName MyVM -SnapshotName "Dave's Snapshot"
 
 
 View the snapshots for all VHDs on a VM
