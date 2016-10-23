@@ -18,20 +18,22 @@
     Example 2
 #>
 
-#Import-Module AzureRM
+Import-Module AzureRM
 #Login-AzureRMAccount
 . "$($PSScriptRoot)\AzureStorageFunctions.PS1"
 
-#TODO: Add Name/Description for snaps
-Function Create-AzureRMVMSnap {
+Function New-AzureRMVMSnap {
 	Param(
-		[Parameter(Mandatory=$true)]$VMName
+		[Parameter(Mandatory=$true)]$VMName,
+        [Parameter(Mandatory=$true)]$SnapshotName,
+        $SnapshotDescription=""
     )
 	
 	Write-Host "Create Snapshot for VM: " -ForegroundColor Yellow -NoNewline
 	Write-Host $VMName -ForegroundColor Cyan
-
+    
 	$VM = Get-AzureRmVM | ? {$_.Name -eq $VMName}
+    #TODO: Warn if VM is running.
 	if ($VM) {
 		$SnapshotGUID = New-GUID
 
@@ -40,8 +42,9 @@ Function Create-AzureRMVMSnap {
 		Foreach ($Disk in $VM.StorageProfile.DataDisks) {
 			$DiskUriList += $Disk.Vhd.Uri
 		}
+        
+        $BaseStorageContext = Get-StorageContextForUri -DiskUri $VM.StorageProfile.OsDisk.Vhd.Uri
 
-		$Snapshots=@()
         $SnapshotTableInfo=@()
 		Foreach ($DiskUri in $DiskUriList) {
 			Write-Host "Snapshot disk: " -ForegroundColor Yellow -NoNewline
@@ -59,45 +62,11 @@ Function Create-AzureRMVMSnap {
             Write-SnapInfo -VMName $VMName -SnapGUID $SnapshotGUID `
                 -PrimaryUri $DiskInfo.Uri.ToString() `
                 -SnapshotUri $Snapshot.SnapshotQualifiedStorageUri.PrimaryUri.AbsoluteUri.ToString() `
-                -StorageContext $StorageContext -DiskNum $DiskUriList.IndexOf($DiskUri)
+                -StorageContext $BaseStorageContext -DiskNum $DiskUriList.IndexOf($DiskUri) `
+                -SnapshotName $SnapshotName -SnapshotDescription $SnapshotDescription
 
 		}
-        #TODO: This will only retrieve storage info for a single context 
-        #  so if disks are split over storage accounts it won't work properly
         Retrieve-SnapInfo -VMName $VMName -SnapGUID $SnapshotGUID -StorageContext $StorageContext
-	} else {
-		Write-Host "Unable to get VM"
-	}}
-#TODO: Combine the Get functions
-Function Get-AzureRMVMSnapBlobs {
-	Param(
-		[Parameter(Mandatory=$true)]$VMName
-	)
-
-	$VM = Get-AzureRmVM | ? {$_.Name -eq $VMName}
-	if ($VM) {
-		$DiskUriList=@()
-		$DiskUriList += $VM.StorageProfile.OsDisk.Vhd.Uri
-		Foreach ($Disk in $VM.StorageProfile.DataDisks) {
-			$DiskUriList += $Disk.Vhd.Uri
-		}
-		$Snapshots=@()
-		Foreach ($DiskUri in $DiskUriList) {
-			Write-Host "Snapshots for Disk: " -ForegroundColor Yellow -NoNewline
-			Write-Host $DiskUri -ForegroundColor Cyan
-
-	        $DiskInfo = Get-DiskInfo -DiskUri $DiskUri
-
-			$StorageContext = Get-StorageContextForUri -DiskUri $DiskUri
-
-                Get-AzureStorageBlob -Container $DiskInfo.ContainerName `
-                    -Context $StorageContext | 
-                    ? {$_.Name -eq $DiskInfo.VHDName `
-                            -and $_.ICloudBlob.IsSnapshot `
-                            -and $_.SnapshotTime -ne $null
-                    }
-		}
-
 	} else {
 		Write-Host "Unable to get VM"
 	}
@@ -123,40 +92,38 @@ Function Get-AzureRMVMSnap {
         Foreach ($SnapInfo in $SnapInfo) {
             $SnapshotBlobs | ? {$_.ICloudBlob.SnapshotQualifiedStorageUri.PrimaryUri.AbsoluteUri.ToString() -eq $SnapInfo.SnapshotUri.ToString()}
         }
-
     }
-
-
 }
 
-Function Delete-AzureRMVMSnapBlobs {
+Function Delete-AzureRMVMSnap {
 	Param (
         [Parameter(Mandatory=$true)]$VMName, 
-        [switch]$DeleteAll=$False
+        [switch]$Force=$False,
+        $SnapshotGuid
     )
-	
-    if ($DeleteAll) {
-        $DiskSnaps = Get-AzureRMVMSnapBlobs -VMName $VMName
-        $DiskSnaps | % {$_.ICloudBlob.Delete()}
-    } else {
-	    $VM = Get-AzureRmVM | ? {$_.Name -eq $VMName}
-	    if ($VM) {
-            $OSDiskUri += $VM.StorageProfile.OsDisk.Vhd.Uri
-            $StorageContext = Get-StorageContextForUri $OSDiskUri
-            $SnapInfo = Retrieve-SnapInfo -VMName $VMName -StorageContext $StorageContext
-            $UniqueGuids = $SnapInfo | % {$_.SnapGuid} | Sort -Unique
-            Foreach ($Guid in $UniqueGuids) {
-                $SnapBlobs = Get-AzureRMVMSnap -VMName $VMName -SnapshotGUID $Guid
-                $SnapBlobs | Select -First 1
+	$VM = Get-AzureRmVM | ? {$_.Name -eq $VMName}
+	if ($VM) {
+        $OSDiskUri += $VM.StorageProfile.OsDisk.Vhd.Uri
+        $StorageContext = Get-StorageContextForUri $OSDiskUri
+        $SnapInfo = Retrieve-SnapInfo -VMName $VMName -StorageContext $StorageContext
+        $UniqueGuids = $SnapInfo | % {$_.SnapGuid} | Sort -Unique
+        if ($SnapshotGuid) {$UniqueGuids = $UniqueGuids | ? {$_ -eq $SnapshotGuid}}
+        Foreach ($Guid in $UniqueGuids) {
+            $SnapBlobs = Get-AzureRMVMSnap -VMName $VMName -SnapshotGUID $Guid
+            $SnapBlobs | Select -First 1
+            if ($Force) {
+                $SnapBlobs | % {$_.ICloudBlob.Delete()}
+            } else {
                 $Delete = Read-Host "$($SnapBlobs.Count) Disks in this snapshot set - Delete this snap? [y/N]: "
                 if ($Delete -eq "y") {
                     $SnapBlobs | % {$_.ICloudBlob.Delete()}
                 }
             }
-        } else {
-            Write-Host "Unable to find VM"
+            Clear-SnapInfo -SnapGUID $Guid -StorageContext $StorageContext
         }
-    }   
+    } else {
+        Write-Host "Unable to find VM"
+    }
 }
 
 Function Revert-AzureRMVMSnap {

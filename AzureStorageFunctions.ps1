@@ -88,7 +88,22 @@ Function Write-SnapInfo {
     $result = $SnapTable.CloudTable.Execute([Microsoft.WindowsAzure.Storage.Table.TableOperation]::Insert($entity))
 }
 
-#TODO: Write Clear-SnapInfo($GUID) Function
+Function Clear-SnapInfo {
+  Param(
+    [Parameter(Mandatory=$true)]$SnapGUID,
+    [Parameter(Mandatory=$true)]$StorageContext
+  )
+    $TableName = "AzureVMSnapshots"
+    $SnapTable = Get-StorageTable -TableName $TableName -StorageContext $StorageContext
+
+    $query = New-Object "Microsoft.WindowsAzure.Storage.Table.TableQuery"
+    $Query.FilterString = "PartitionKey eq '$($SnapGUID)'"
+
+    $SnapInfo = $SnapTable.CloudTable.ExecuteQuery($query)
+    $result = $SnapTable.CloudTable.Execute(
+        [Microsoft.WindowsAzure.Storage.Table.TableOperation]::Delete($SnapInfo))
+}
+
 
 Function Get-DiskInfo {
     Param([Parameter(Mandatory=$true)]$DiskUri) 
@@ -119,4 +134,36 @@ Function Get-StorageContextForUri {
         -StorageAccountKey $StorageKey[0].Value
 
     return $StorageContext
+}
+
+Function Get-AzureRMVMSnapBlobs {
+	Param(
+		[Parameter(Mandatory=$true)]$VMName
+	)
+
+	$VM = Get-AzureRmVM | ? {$_.Name -eq $VMName}
+	if ($VM) {
+		$DiskUriList=@()
+		$DiskUriList += $VM.StorageProfile.OsDisk.Vhd.Uri
+		Foreach ($Disk in $VM.StorageProfile.DataDisks) {
+			$DiskUriList += $Disk.Vhd.Uri
+		}
+		Foreach ($DiskUri in $DiskUriList) {
+			Write-Host "Snapshots for Disk: " -ForegroundColor Yellow -NoNewline
+			Write-Host $DiskUri -ForegroundColor Cyan
+
+	        $DiskInfo = Get-DiskInfo -DiskUri $DiskUri
+
+			$StorageContext = Get-StorageContextForUri -DiskUri $DiskUri
+
+            Get-AzureStorageBlob -Container $DiskInfo.ContainerName `
+                -Context $StorageContext | 
+                ? {$_.Name -eq $DiskInfo.VHDName `
+                        -and $_.ICloudBlob.IsSnapshot `
+                        -and $_.SnapshotTime -ne $null }
+		}
+
+	} else {
+		Write-Host "Unable to get VM"
+	}
 }
