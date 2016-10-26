@@ -3,7 +3,7 @@ Powershell Functions for Creating and Reverting to Azure RM VM Snapshots.
 
 The functions handle multiple disk VMs by saving meta-data to an Azure Table on the OS disk's storage account.
 
-**It is inadvisable to use this on a production VM. The revert function will delete your VM and recreate it using the same settings. It's possible that the script may cause unintended results.**
+**It is inadvisable to use this on a production VM. The revert function will delete your VM configuration and recreate it using the same settings. It's possible that the script may cause unintended results.**
 
 Examples:
 
