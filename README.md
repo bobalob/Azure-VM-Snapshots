@@ -1,17 +1,18 @@
 # Azure-VM-Snapshots
-Powershell Functions for Creating Azure RM VM Snapshots
+Powershell Functions for Creating and Reverting to Azure RM VM Snapshots
 
-**DO NOT USE THIS ON A PRODUCTION VM!**
+**It is inadvisable to use this on a production VM. The revert function will delete your VM and recreate it using the same settings. It's possible that the script may cause unintended results.**
 
-Usage:
+Examples:
 
-Load the functions
+Load the functions, you will also need to login to your Azure account
 
     C:\> . .\AzureSnapFunctions.PS1
+    C:\> Login-AzureRMAccount
 
 Create a New snapshot for all VHDs in a VM (VM Should be powered down)
 
-    C:\> New-AzureRMVMSnap -VMName MyVM -SnapshotName "Dave's Snapshot"
+    C:\> New-AzureRMVMSnap -VMName MyVM -SnapshotName "Foo"
 
 
 View the snapshots for all VHDs on a VM
@@ -24,7 +25,7 @@ Delete all snapshots for all VHDs on a VM
     C:\> Delete-AzureRMVMSnap -VMName MyVM -Force
     
 
-Revert to a snapshots for all VHDs on a VM (VM Must be powered down)
+Revert to a snapshots for all VHDs on a VM - This will remove the VM and recreate it using the reverted disk.
 
     C:\> Revert-AzureRMVMSnap -VMName MyVM
 
