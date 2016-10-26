@@ -12,7 +12,7 @@ Load the functions, you will also need to login to your Azure account
     C:\> . .\AzureSnapFunctions.PS1
     C:\> Login-AzureRMAccount
 
-Create a New snapshot for all VHDs in a VM (VM Should be powered down)
+Create a New snapshot for all VHDs in a VM
 
     C:\> New-AzureRMVMSnap -VMName MyVM -SnapshotName "Foo"
 
