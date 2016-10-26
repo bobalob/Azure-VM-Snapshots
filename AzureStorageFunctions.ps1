@@ -45,7 +45,8 @@ Function Retrieve-SnapInfo {
 
     $SnapInfo = $SnapTable.CloudTable.ExecuteQuery($query)
     foreach ($snap in $SnapInfo) {
-      $OutputItem = "" | Select VMName, SnapshotName, DiskNum, SnapGUID, PrimaryUri, SnapshotUri, SnapshotDescription, SnapshotTime
+      $OutputItem = "" | Select VMName, SnapshotName, DiskNum, SnapGUID, `
+        PrimaryUri, SnapshotUri, SnapshotDescription, SnapshotTime
       $OutputItem.SnapGUID = $Snap.PartitionKey
       $OutPutItem.DiskNum = $Snap.RowKey
       $OutputItem.VMName = $Snap.Properties.VMName.StringValue
@@ -85,7 +86,8 @@ Function Write-SnapInfo {
     $entity.Properties.Add("SnapshotName", $SnapshotName)
     $entity.Properties.Add("SnapshotDescription", $SnapshotDescription)
     $entity.Properties.Add("SnapshotTime", ((Get-Date).ToString()))
-    $result = $SnapTable.CloudTable.Execute([Microsoft.WindowsAzure.Storage.Table.TableOperation]::Insert($entity))
+    $result = $SnapTable.CloudTable.Execute(
+        [Microsoft.WindowsAzure.Storage.Table.TableOperation]::Insert($entity))
 }
 
 Function Clear-SnapInfo {
@@ -100,10 +102,11 @@ Function Clear-SnapInfo {
     $Query.FilterString = "PartitionKey eq '$($SnapGUID)'"
 
     $SnapInfo = $SnapTable.CloudTable.ExecuteQuery($query)
-    $result = $SnapTable.CloudTable.Execute(
-        [Microsoft.WindowsAzure.Storage.Table.TableOperation]::Delete($SnapInfo))
+    foreach ($Snap in $SnapInfo) {
+        $result = $SnapTable.CloudTable.Execute(
+            [Microsoft.WindowsAzure.Storage.Table.TableOperation]::Delete($Snap))
+    }
 }
-
 
 Function Get-DiskInfo {
     Param([Parameter(Mandatory=$true)]$DiskUri) 
@@ -149,9 +152,6 @@ Function Get-AzureRMVMSnapBlobs {
 			$DiskUriList += $Disk.Vhd.Uri
 		}
 		Foreach ($DiskUri in $DiskUriList) {
-			Write-Host "Snapshots for Disk: " -ForegroundColor Yellow -NoNewline
-			Write-Host $DiskUri -ForegroundColor Cyan
-
 	        $DiskInfo = Get-DiskInfo -DiskUri $DiskUri
 
 			$StorageContext = Get-StorageContextForUri -DiskUri $DiskUri
