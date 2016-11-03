@@ -5,6 +5,8 @@ The functions handle multiple disk VMs by saving meta-data to an Azure Table on 
 
 **It is inadvisable to use this on a production VM. The revert function will delete your VM configuration and recreate it using the same settings. It's possible that the script may cause unintended results.**
 
+There are quite a few edge cases that this script will miss. Premium disks are not supported as they do not support Azure Table storage which is required for the script to save it's metadata.
+
 Examples:
 
 Load the functions, you will also need to login to your Azure account

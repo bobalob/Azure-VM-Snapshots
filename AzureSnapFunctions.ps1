@@ -237,10 +237,25 @@ Function Revert-AzureRMVMSnap {
                 $osDiskCaching = $VM.StorageProfile.OsDisk.Caching
 
                 #Set the OS disk to attach
+                #TODO: Replace -windows with correct OS
                 $vm=Set-AzureRmVMOSDisk -VM $vm -VhdUri $osDiskUri -name $DiskName `
                     -CreateOption attach -Windows -Caching $osDiskCaching 
                 
+                #Attach data Disks
+                if ($VM.StorageProfile.DataDisks.count -gt 0) {
+                    Write-Host "Configure additional disks"
+                    $DataDisks = $VM.StorageProfile.DataDisks
+                    $VM.StorageProfile.DataDisks = $Null
+                    foreach ($DataDisk in $DataDisks) {
+                        $VM = Add-AzureRmVMDataDisk -VM $VM -VhdUri $DataDisk.Vhd.Uri `
+                            -Name $DataDisk.Name -CreateOption "Attach" `
+                            -Caching $DataDisk.Caching -DiskSizeInGB $DataDisk.DiskSizeInGB `
+                            -Lun $DataDisk.Lun
+                    }   
+                }
+
                 #If this isn't set the VM will default to Windows and get stuck in the "Updating" state
+                #Probably because -windows is set when adding the OS disk!
                 Write-Host "Setting VM OsType to $($osType)"
                 $VM.StorageProfile.OsDisk.OsType = $osType
 
