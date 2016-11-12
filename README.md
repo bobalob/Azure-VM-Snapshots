@@ -7,6 +7,8 @@ The functions handle multiple disk VMs by saving meta-data to an Azure Table on 
 
 There are quite a few edge cases that this script will miss. Premium disks are not supported as they do not support Azure Table storage which is required for the script to save it's metadata.
 
+It also won't play nice if disks are removed from the VM after a snap is taken.
+
 Examples:
 
 Load the functions, you will also need to login to your Azure account
