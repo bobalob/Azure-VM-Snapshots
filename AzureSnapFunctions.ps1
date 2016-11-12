@@ -35,6 +35,13 @@ Function New-AzureRMVMSnap {
     
 	$VM = Get-AzureRmVM | ? {$_.Name -eq $VMName}
 	if ($VM) {
+         
+        #Warn if VM OS disk is on Premium storage and break
+        if (Test-Premium $VM.StorageProfile.OsDisk.Vhd.Uri) {
+            Write-Warning "Premium storage is not currently supported by this function"
+            Break
+        }
+
         #Warn if VM is running and break
         $VMState = $VM | Get-AzureRmVm | Get-AzureRmVm -Status | 
             select Name, @{n="Status"; e={$_.Statuses[1].DisplayStatus}}
@@ -60,7 +67,7 @@ Function New-AzureRMVMSnap {
 		}
         
         $BaseStorageContext = Get-StorageContextForUri -DiskUri $VM.StorageProfile.OsDisk.Vhd.Uri
-
+        
         $SnapshotTableInfo=@()
 		Foreach ($DiskUri in $DiskUriList) {
 			Write-Host "Snapshot disk: " -ForegroundColor Yellow -NoNewline

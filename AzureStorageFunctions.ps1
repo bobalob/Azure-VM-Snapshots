@@ -115,7 +115,7 @@ Function Get-DiskInfo {
     $DiskInfo.Uri = $DiskUri
     $DiskInfo.StorageAccountName = ($DiskUri -split "https://")[1].Split(".")[0]
     $DiskInfo.VHDName = $DiskUri.Split("/")[-1]
-    $DiskInfo.ContainerName = $DiskUri.Split("/")[-2]
+    $DiskInfo.ContainerName = $DiskUri.Split("/")[3]
     Return $DiskInfo		
 }
 
@@ -166,4 +166,16 @@ Function Get-AzureRMVMSnapBlobs {
 	} else {
 		Write-Host "Unable to get VM"
 	}
+}
+
+Function Test-Premium {
+    Param (
+        [Parameter(Mandatory=$true)]$DiskUri
+    )
+    $DiskInfo = Get-DiskInfo -DiskUri $DiskUri
+
+    $StorageAccount = Get-AzureRmStorageAccount | 
+        ? {$_.StorageAccountName -eq $DiskInfo.StorageAccountName}
+
+    Return $StorageAccount.Sku.Tier -eq "Premium"
 }
