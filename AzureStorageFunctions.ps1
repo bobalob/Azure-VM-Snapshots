@@ -126,7 +126,8 @@ Function Get-StorageContextForUri {
 				
 	$StorageAccountResource = find-azurermresource `
         -ResourceNameContains $DiskInfo.StorageAccountName `
-         -WarningAction Ignore
+         -WarningAction Ignore |
+            Where-Object {$_.Name -eq $DiskInfo.StorageAccountName}
 
 	$StorageKey = Get-AzureRmStorageAccountKey `
         -Name $StorageAccountResource.Name `
