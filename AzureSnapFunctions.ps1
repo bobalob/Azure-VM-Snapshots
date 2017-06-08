@@ -22,7 +22,7 @@ Import-Module AzureRM
 #Login-AzureRMAccount
 . "$($PSScriptRoot)\AzureStorageFunctions.PS1"
 
-Function New-AzureRMVMSnap {
+Function New-AzureRmVmSnap {
     Param(
         [Parameter(Mandatory=$true)]$VMName,
         [Parameter(Mandatory=$true)]$SnapshotName,
@@ -33,7 +33,7 @@ Function New-AzureRMVMSnap {
 	Write-Host "Create Snapshot for VM: " -ForegroundColor Yellow -NoNewline
 	Write-Host $VMName -ForegroundColor Cyan
     
-	$VM = Get-AzureRmVM | ? {$_.Name -eq $VMName}
+	$VM = Get-AzureRmVm | Where-Object {$_.Name -eq $VMName}
 	if ($VM) {
          
         #Warn if VM OS disk is on Premium storage and break
@@ -50,7 +50,7 @@ Function New-AzureRMVMSnap {
             #Stop the VM if force enabled
             if ($Force) {
                 Write-Host "Stopping VM..."
-                $Stopped = $VM | Stop-AzureRMVM -Force
+                $Stopped = $VM | Stop-AzureRmVm -Force
             } else {
                 #Show warning
                 Write-Warning "VM is currently running, use -force to stop the VM"
@@ -68,7 +68,6 @@ Function New-AzureRMVMSnap {
         
         $BaseStorageContext = Get-StorageContextForUri -DiskUri $VM.StorageProfile.OsDisk.Vhd.Uri
         
-        $SnapshotTableInfo=@()
 		Foreach ($DiskUri in $DiskUriList) {
 			Write-Host "Snapshot disk: " -ForegroundColor Yellow -NoNewline
 			Write-Host $DiskUri -ForegroundColor Cyan
@@ -92,7 +91,7 @@ Function New-AzureRMVMSnap {
         
         if ($VMState.Status -eq "VM Running") {
             Write-Host "Restarting VM..."
-            $Started = $VM | Start-AzureRMVM
+            $Started = $VM | Start-AzureRmVm
         }
 
         Retrieve-SnapInfo -VMName $VMName -SnapGUID $SnapshotGUID -StorageContext $StorageContext
@@ -101,13 +100,13 @@ Function New-AzureRMVMSnap {
 	}
 }
 
-Function Get-AzureRMVMSnap {
+Function Get-AzureRmVmSnap {
 	Param(
         [Parameter(Mandatory=$true)]$VMName,
         $SnapshotGUID,
         [switch]$GetBlobs=$False
 	)
-	$VM = Get-AzureRmVM | ? {$_.Name -eq $VMName}
+	$VM = Get-AzureRmVm | Where-Object {$_.Name -eq $VMName}
 	if ($VM) {
         $OSDiskUri += $VM.StorageProfile.OsDisk.Vhd.Uri
         $StorageContext = Get-StorageContextForUri -DiskUri $OSDiskUri
@@ -119,7 +118,7 @@ Function Get-AzureRMVMSnap {
         }
 
         if ($GetBlobs) {
-            $SnapshotBlobs = Get-AzureRMVMSnapBlobs -VMName $VMName
+            $SnapshotBlobs = Get-AzureRmVmSnapBlobs -VMName $VMName
             Foreach ($SnapInfo in $SnapInfo) {
                 $SnapshotBlobs | ? {$_.ICloudBlob.SnapshotQualifiedStorageUri.PrimaryUri.AbsoluteUri.ToString() -eq $SnapInfo.SnapshotUri.ToString()}
             }
@@ -129,13 +128,13 @@ Function Get-AzureRMVMSnap {
     }
 }
 
-Function Delete-AzureRMVMSnap {
+Function Delete-AzureRmVmSnap {
 	Param (
         [Parameter(Mandatory=$true)]$VMName, 
         [switch]$Force=$False,
         $SnapshotGuid
     )
-	$VM = Get-AzureRmVM | ? {$_.Name -eq $VMName}
+	$VM = Get-AzureRmVm | Where-Object {$_.Name -eq $VMName}
 	if ($VM) {
         $OSDiskUri += $VM.StorageProfile.OsDisk.Vhd.Uri
         $StorageContext = Get-StorageContextForUri $OSDiskUri
@@ -149,8 +148,8 @@ Function Delete-AzureRMVMSnap {
                     $SnapBlobs | % {$_.ICloudBlob.Delete()}
                     Clear-SnapInfo -SnapGUID $Guid -StorageContext $StorageContext
                 } else {
-                    $SnapBlobs = Get-AzureRMVMSnap -VMName $VMName -SnapshotGUID $Guid -GetBlobs
-                    $Delete = Read-Host "$($SnapBlobs.Count) Disks in this snapshot set - Delete this snap? [y/N]: "
+                    $SnapBlobs = Get-AzureRmVmSnap -VMName $VMName -SnapshotGUID $Guid -GetBlobs
+                    $Delete = Read-Host "$($SnapBlobs.Count) Disk(s) in this snapshot set - Delete this snap? [y/N]: "
                     if ($Delete -eq "y") {
                         $SnapBlobs | % {$_.ICloudBlob.Delete()}
                         Clear-SnapInfo -SnapGUID $Guid -StorageContext $StorageContext
@@ -165,22 +164,22 @@ Function Delete-AzureRMVMSnap {
     }
 }
 
-Function Revert-AzureRMVMSnap {
+Function Revert-AzureRmVmSnap {
 	Param (
         [Parameter(Mandatory=$true)]$VMName, 
         [switch]$Force=$False,
         $SnapshotGuid
     )
-	$VM = Get-AzureRmVM | ? {$_.Name -eq $VMName}
+	$VM = Get-AzureRmVm | Where-Object {$_.Name -eq $VMName}
 	if ($VM) {
         #Get user selected snapshot
         $OSDiskUri += $VM.StorageProfile.OsDisk.Vhd.Uri
         $StorageContext = Get-StorageContextForUri $OSDiskUri
         $SnapInfo = Retrieve-SnapInfo -VMName $VMName -StorageContext $StorageContext
-        $UniqueGuids = $SnapInfo | % {$_.SnapGuid} | Sort -Unique
-        if ($SnapshotGuid) {$UniqueGuids = $UniqueGuids | ? {$_ -eq $SnapshotGuid}}
+        $UniqueGuids = $SnapInfo | Foreach-Object {$_.SnapGuid} | Sort-Object -Unique
+        if ($SnapshotGuid) {$UniqueGuids = $UniqueGuids | Where-Object {$_ -eq $SnapshotGuid}}
         Foreach ($Guid in $UniqueGuids) {
-            $SnapBlobs = Get-AzureRMVMSnap -VMName $VMName -SnapshotGUID $Guid -GetBlobs
+            $SnapBlobs = Get-AzureRmVmSnap -VMName $VMName -SnapshotGUID $Guid -GetBlobs
             if ($Force -and $UniqueGuids.Count -eq 1) {
                 $Revert = "y"
             } else {
@@ -189,45 +188,47 @@ Function Revert-AzureRMVMSnap {
                         "-Force only works with a given GUID or if there is only 1 snapshot set for this VM"
                     Break
                 }
-                $SnapInfo | ? {$_.SnapGUID -eq $Guid}
+                $SnapInfo | Where-Object {$_.SnapGUID -eq $Guid}
                 $Revert = Read-Host "$($SnapBlobs.Count) Disks in this snapshot set - Revert to this snap? [y/N]: "
             }
             if ($Revert -eq "y") {
+                Write-Host "Reverting to snapshot with GUID: " -ForegroundColor Yellow -NoNewLine
+                Write-Host $Guid -ForegroundColor Cyan
 
                 #Shut down the VM
                 Write-Host "Stopping the VM..."
-                $VM | Stop-AzureRMVM -Force
+                $VM | Stop-AzureRmVm -Force
+
+                #Back up the VM config in case something goes wrong - recovery function not working yet
+                #TODO: Recovery Function
+                if (!(Test-Path ".\VM-Backups")) {
+                    $Null = New-Item -Path ".\VM-Backups" -ItemType "Directory"
+                }
+                Export-Clixml -Path ".\VM-Backups\$($VM.Name).Original.xml" -InputObject $VM
 
                 #Remove the VM config
                 Write-Host "Removing the VM configuration..."
                 $VM | Remove-AzureRmVm -Force
 
-                Foreach ($SnapBlob in $SnapBlobs) {
-                    $ThisSnap = $SnapInfo | ? {$_.SnapGUID -eq $guid -and $_.SnapshotUri -eq `
-                        $SnapBlob.ICloudBlob.SnapshotQualifiedStorageUri.PrimaryUri.AbsoluteUri.ToString()}
-                    Write-Host "Reverting disk $($ThisSnap.DiskNum)..."
-                    $DiskInfo = Get-DiskInfo -DiskUri $SnapBlob.ICloudBlob.Uri.OriginalString
-                    $OriginalDiskBlob = Get-AzureStorageBlob -Container $DiskInfo.ContainerName `
-                        -Context $StorageContext | 
-                        ? {$_.Name -eq $DiskInfo.VHDName `
-                                -and -not $_.ICloudBlob.IsSnapshot `
-                                -and $_.SnapshotTime -eq $null
-                        }
-                    $JobId = $OriginalDiskBlob.ICloudBlob.StartCopyFromBlob($SnapBlob.ICloudBlob) 
-                    #TODO: Tidy this up into a function possibly...
-                    Do {
+                Try {
+                    Write-Host "Reverting the snapshot..."
+                    Foreach ($SnapBlob in $SnapBlobs) {
+                        $ThisSnap = $SnapInfo | ? {$_.SnapGUID -eq $guid -and $_.SnapshotUri -eq `
+                            $SnapBlob.ICloudBlob.SnapshotQualifiedStorageUri.PrimaryUri.AbsoluteUri.ToString()}
+                        Write-Host "Reverting disk $($ThisSnap.DiskNum)..."
+                        $DiskInfo = Get-DiskInfo -DiskUri $SnapBlob.ICloudBlob.Uri.OriginalString
                         $OriginalDiskBlob = Get-AzureStorageBlob -Container $DiskInfo.ContainerName `
-                        -Context $StorageContext | 
-                        ? {$_.Name -eq $DiskInfo.VHDName `
-                                -and -not $_.ICloudBlob.IsSnapshot `
-                                -and $_.SnapshotTime -eq $null
-                        }
-                        $CopyStatus = ($OriginalDiskBlob.ICloudBlob.CopyState | ? {$_.CopyId -eq $JobId}).Status
-                        if ($CopyStatus -eq "Success") { break }
-                        Write-Host "Waiting for snapshot copy... (60s)"
-                        Start-Sleep 60
-                    } Until ($CopyStatus -eq "Success")
-                    Write-Host "Copy Complete..."
+                            -Context $StorageContext | 
+                            Where-Object {$_.Name -eq $DiskInfo.VHDName `
+                                    -and -not $_.ICloudBlob.IsSnapshot `
+                                    -and $_.SnapshotTime -eq $null
+                                }
+                        $Copy = $OriginalDiskBlob.ICloudBlob.StartCopy($SnapBlob.ICloudBlob) 
+                        Write-Host "Reversion Compete for disk $($ThisSnap.DiskNum) - Copy ID: $($Copy)"
+                    }
+
+                } catch {
+                    Write-Error "Failed to revert the snapshot, recreating VM with current disk"
                 }
 
                 #Remove disallowed settings
@@ -245,7 +246,7 @@ Function Revert-AzureRMVMSnap {
 
                 #Set the OS disk to attach
                 #TODO: Replace -windows with correct OS
-                $vm=Set-AzureRmVMOSDisk -VM $vm -VhdUri $osDiskUri -name $DiskName `
+                $vm=Set-AzureRmVmOSDisk -VM $vm -VhdUri $osDiskUri -name $DiskName `
                     -CreateOption attach -Windows -Caching $osDiskCaching 
                 
                 #Attach data Disks
@@ -254,7 +255,7 @@ Function Revert-AzureRMVMSnap {
                     $DataDisks = $VM.StorageProfile.DataDisks
                     $VM.StorageProfile.DataDisks = $Null
                     foreach ($DataDisk in $DataDisks) {
-                        $VM = Add-AzureRmVMDataDisk -VM $VM -VhdUri $DataDisk.Vhd.Uri `
+                        $VM = Add-AzureRmVmDataDisk -VM $VM -VhdUri $DataDisk.Vhd.Uri `
                             -Name $DataDisk.Name -CreateOption "Attach" `
                             -Caching $DataDisk.Caching -DiskSizeInGB $DataDisk.DiskSizeInGB `
                             -Lun $DataDisk.Lun
@@ -263,12 +264,11 @@ Function Revert-AzureRMVMSnap {
 
                 #If this isn't set the VM will default to Windows and get stuck in the "Updating" state
                 #Probably because -windows is set when adding the OS disk!
-                Write-Host "Setting VM OsType to $($osType)"
                 $VM.StorageProfile.OsDisk.OsType = $osType
 
                 #Recreate the VM
-                Write-Host "Recreate the VM..."
-                New-AzureRmVM -ResourceGroupName $rgName -Location $locName -VM $VM -WarningAction Ignore
+                Write-Host "`nRecreate the VM..."
+                New-AzureRmVm -ResourceGroupName $rgName -Location $locName -VM $VM -WarningAction Ignore
 
                 #Break out of the UniqueGuids loop
                 Break
