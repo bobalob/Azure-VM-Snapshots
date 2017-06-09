@@ -139,21 +139,27 @@ Function Delete-AzureRmVmSnap {
         $OSDiskUri += $VM.StorageProfile.OsDisk.Vhd.Uri
         $StorageContext = Get-StorageContextForUri $OSDiskUri
         $SnapInfo = Retrieve-SnapInfo -VMName $VMName -StorageContext $StorageContext
-        $UniqueGuids = $SnapInfo | % {$_.SnapGuid} | Sort -Unique
-        if ($SnapshotGuid) {$UniqueGuids = $UniqueGuids | ? {$_ -eq $SnapshotGuid}}
+        $UniqueGuids = $SnapInfo | ForEach-Object {$_.SnapGuid} | Sort-Object -Unique
+        if ($SnapshotGuid) {$UniqueGuids = $UniqueGuids | Where-Object {$_ -eq $SnapshotGuid}}
         if ($UniqueGuids -ne $null -or $UniqueGuids.Count -gt 0) {
             Foreach ($Guid in $UniqueGuids) {
-                $SnapInfo | ? {$_.SnapGUID -eq $Guid}
-                if ($Force) {
-                    $SnapBlobs | % {$_.ICloudBlob.Delete()}
-                    Clear-SnapInfo -SnapGUID $Guid -StorageContext $StorageContext
-                } else {
-                    $SnapBlobs = Get-AzureRmVmSnap -VMName $VMName -SnapshotGUID $Guid -GetBlobs
-                    $Delete = Read-Host "$($SnapBlobs.Count) Disk(s) in this snapshot set - Delete this snap? [y/N]: "
-                    if ($Delete -eq "y") {
-                        $SnapBlobs | % {$_.ICloudBlob.Delete()}
-                        Clear-SnapInfo -SnapGUID $Guid -StorageContext $StorageContext
+                $SnapInfo | Where-Object {$_.SnapGUID -eq $Guid}
+                $SnapBlobs = Get-AzureRmVmSnap -VMName $VMName -SnapshotGUID $Guid -GetBlobs
+                if ($SnapBlobs) {
+                    if (!($Force)) {
+                        $Delete = Read-Host "$($SnapBlobs.Count) Disk(s) in this snapshot set - Delete this snap? [y/N]: "
                     }
+                    if ($Delete -eq "y" -or $Force) {
+                        Try {
+                            $SnapBlobs | ForEach-Object {$_.ICloudBlob.Delete()}
+                        } catch {
+                            Write-Error "Unable to delete the snapshot $Guid"
+                        } finally {
+                            Clear-SnapInfo -SnapGUID $Guid -StorageContext $StorageContext
+                        }
+                    }
+                } else {
+                    Write-Error "No snapshot blobs exist for snapshot GUID: $($Guid), Snapshot table is out of sync with actual snapshot blobs"
                 }
             }
         } else {
@@ -196,8 +202,13 @@ Function Revert-AzureRmVmSnap {
                 Write-Host $Guid -ForegroundColor Cyan
 
                 #Shut down the VM
-                Write-Host "Stopping the VM..."
-                $VM | Stop-AzureRmVm -Force
+                Try {
+                    Write-Host "Stopping the VM..."
+                    $VM | Stop-AzureRmVm -Force
+                } catch {
+                    Write-Error "Failed to stop the VM"
+                    Break
+                }
 
                 #Back up the VM config in case something goes wrong - recovery function not working yet
                 #TODO: Recovery Function
@@ -207,8 +218,18 @@ Function Revert-AzureRmVmSnap {
                 Export-Clixml -Path ".\VM-Backups\$($VM.Name).Original.xml" -InputObject $VM
 
                 #Remove the VM config
-                Write-Host "Removing the VM configuration..."
-                $VM | Remove-AzureRmVm -Force
+                Try {
+                    Write-Host "Removing the VM configuration..."
+                    $VM | Remove-AzureRmVm -Force
+                } catch {
+                    Write-Error "Failed to remove the VM config"
+                    if (Get-AzureRmVm | Where-Object {$_.Name -eq $VMName}) {
+                        Write-Host "VM Still exists, exiting..."
+                        Break
+                    } else {
+                        Write-Host "VM was actually removed, continuting..."
+                    }
+                }
 
                 Try {
                     Write-Host "Reverting the snapshot..."
